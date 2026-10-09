@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AgentPanel from "./components/AgentPanel";
+import LandingPage from "./components/LandingPage";
+import SemgrepPanel from "./components/SemgrepPanel";
 import VulnStatus from "./components/VulnStatus";
-import type { MatchEvent, MatchStatus, Score, VulnState } from "./types";
+import type { MatchEvent, MatchStatus, Score, SemgrepFinding, VulnState } from "./types";
 
 const DEFAULT_VULN_STATUS: Record<string, VulnState> = {
   sql_injection:      { discovered: false, exploited: false, patched: false },
@@ -24,6 +26,10 @@ export default function App() {
   const [redEvents, setRedEvents] = useState<MatchEvent[]>([]);
   const [blueEvents, setBlueEvents] = useState<MatchEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [scanFindings, setScanFindings] = useState<SemgrepFinding[] | null>(null);
+  const [scanStatus, setScanStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanStderr, setScanStderr] = useState<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
 
@@ -43,6 +49,14 @@ export default function App() {
       }
     }
 
+    if (ev.type === "scan") {
+      if (ev.scan_status) setScanStatus(ev.scan_status);
+      if (ev.scan_error) setScanError(ev.scan_error);
+      if (ev.scan_stderr !== undefined) setScanStderr(ev.scan_stderr ?? null);
+      if (ev.findings !== undefined && ev.findings !== null) setScanFindings(ev.findings);
+      if (ev.scan_status === "running") setScanStatus("running");
+    }
+
     if (ev.score_delta != null && ev.agent) {
       setScore((prev) => ({
         ...prev,
@@ -53,7 +67,6 @@ export default function App() {
     if (ev.agent === "red") setRedEvents((prev) => [...prev, ev]);
     else if (ev.agent === "blue") setBlueEvents((prev) => [...prev, ev]);
     else if (ev.type === "match_end") {
-      // push to both panels
       setRedEvents((prev) => [...prev, ev]);
       setBlueEvents((prev) => [...prev, ev]);
     }
@@ -85,6 +98,10 @@ export default function App() {
     setRedEvents([]);
     setBlueEvents([]);
     setTimeRemaining(210);
+    setScanFindings(null);
+    setScanStatus("idle");
+    setScanError(null);
+    setScanStderr(null);
 
     const res = await fetch("/api/match/start", { method: "POST" });
     if (res.ok) {
@@ -118,19 +135,22 @@ export default function App() {
     ? "text-blue-400 border-blue-600 bg-blue-950/40"
     : "text-gray-300 border-gray-600 bg-gray-900/40";
 
+  if (matchStatus === "idle") {
+    return <LandingPage onStart={handleStart} />;
+  }
+
   return (
     <div className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">
-            ⚡ BALLPIT <span className="text-gray-500 font-normal">CYBERRANGE</span>
+            ⚡ CYBERRANGE <span className="text-gray-500 font-normal">ARENA</span>
           </h1>
           <p className="text-xs text-gray-600 mt-0.5">Red vs Blue · AI agents · Live match</p>
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Connection dot */}
           {isRunning && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`} />
@@ -138,18 +158,16 @@ export default function App() {
             </div>
           )}
 
-          {/* Timer */}
           <div className={`tabular-nums text-2xl font-bold ${isRunning && timeRemaining < 30 ? "text-red-400 animate-pulse" : "text-gray-300"}`}>
             {formatTime(timeRemaining)}
           </div>
 
-          {/* Control button */}
           {!isRunning ? (
             <button
               onClick={handleStart}
               className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors"
             >
-              {isFinished ? "New Match" : "Start Match"}
+              New Match
             </button>
           ) : (
             <button
@@ -185,46 +203,24 @@ export default function App() {
         </div>
       </div>
 
-      {/* Idle overlay */}
-      {matchStatus === "idle" && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-12 text-center mb-5">
-          <p className="text-gray-500 text-sm">Press <span className="text-emerald-400 font-semibold">Start Match</span> to launch both agents.</p>
-          <p className="text-gray-600 text-xs mt-2">Red attacks · Blue defends · First to exploit or patch wins points</p>
-        </div>
-      )}
-
       {/* Agent panels */}
-      {matchStatus !== "idle" && (
-        <div className="grid grid-cols-2 gap-4 mb-5">
-          <AgentPanel side="red" events={redEvents} score={score.red} />
-          <AgentPanel side="blue" events={blueEvents} score={score.blue} />
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        <AgentPanel side="red" events={redEvents} score={score.red} />
+        <AgentPanel side="blue" events={blueEvents} score={score.blue} />
+      </div>
+
+      {/* Semgrep static analysis panel */}
+      <div className="mb-5">
+        <SemgrepPanel
+          findings={scanFindings}
+          scanStatus={scanStatus}
+          scanError={scanError}
+          scanStderr={scanStderr}
+        />
+      </div>
 
       {/* Vuln status */}
-      {matchStatus !== "idle" && (
-        <VulnStatus vulnStatus={vulnStatus} />
-      )}
-
-      {/* Scoring legend */}
-      {matchStatus === "idle" && (
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div className="rounded-xl border border-red-900/40 bg-red-950/10 p-4">
-            <p className="text-xs font-bold tracking-widest text-red-500 mb-2">RED SCORING</p>
-            <ul className="text-xs text-gray-400 space-y-1">
-              <li>+20 pts — Exploit a vulnerability</li>
-              <li>+10 pts — Report a finding</li>
-            </ul>
-          </div>
-          <div className="rounded-xl border border-blue-900/40 bg-blue-950/10 p-4">
-            <p className="text-xs font-bold tracking-widest text-blue-500 mb-2">BLUE SCORING</p>
-            <ul className="text-xs text-gray-400 space-y-1">
-              <li>+15 pts — Raise a detection alert</li>
-              <li>+25 pts — Patch a vulnerability</li>
-            </ul>
-          </div>
-        </div>
-      )}
+      <VulnStatus vulnStatus={vulnStatus} />
     </div>
   );
 }

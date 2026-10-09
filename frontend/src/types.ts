@@ -14,10 +14,18 @@ export interface Score {
 export type EventType =
   | "agent_start" | "agent_done"
   | "probe" | "exploit" | "finding"
-  | "monitor" | "alert" | "patch"
+  | "monitor" | "alert" | "patch" | "scan"
   | "thought" | "error"
   | "timer" | "heartbeat"
   | "match_end" | "state_sync";
+
+export interface SemgrepFinding {
+  vuln_id: string;
+  endpoint: string;
+  cwe: string;
+  message: string;
+  line: number | null;
+}
 
 export interface MatchEvent {
   type: EventType;
@@ -26,6 +34,11 @@ export interface MatchEvent {
   elapsed?: number;
   result_summary: string;
   score_delta?: number;
+  // scan fields
+  findings?: SemgrepFinding[] | null;
+  scan_status?: "running" | "done" | "error";
+  scan_error?: string;
+  scan_stderr?: string | null;
   // match_end fields
   winner?: string;
   final_score_red?: number;
