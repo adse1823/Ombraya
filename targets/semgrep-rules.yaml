@@ -1,0 +1,35 @@
+rules:
+
+  - id: sql_injection
+    pattern: $CUR.execute($STR + $VAR + ...)
+    message: "SQL injection: unsanitised string concatenation passed directly to execute(). Use parameterised queries instead."
+    languages: [python]
+    severity: ERROR
+    metadata:
+      vuln_id: sql_injection
+      cwe: "CWE-89"
+      endpoint: /target/search
+
+  - id: weak_credentials
+    patterns:
+      - pattern: $VAR = "$LITERAL"
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: '(?i).*(password|passwd|pwd|secret|credential).*'
+    message: "Hardcoded credential: sensitive value stored as a plain string in source."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      vuln_id: weak_credentials
+      cwe: "CWE-798"
+      endpoint: /target/login
+
+  - id: sensitive_exposure
+    pattern: os.path.join($BASE, $UNSANITIZED)
+    message: "Path traversal: unsanitised input passed to os.path.join() may expose files outside the intended directory."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      vuln_id: sensitive_exposure
+      cwe: "CWE-22"
+      endpoint: /target/docs

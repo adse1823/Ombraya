@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sys
 from anthropic import AsyncAnthropic
 
 from .target import target
@@ -68,19 +69,21 @@ RED_TOOLS = [
 
 BLUE_SYSTEM = """You are a blue team security defender monitoring a web application under active attack in a cyber range.
 
-Your goal: detect attacks in the request logs and patch vulnerabilities before the red team scores more points.
+Your goal: detect attacks and patch vulnerabilities before the red team scores more points.
+
+Known vulnerabilities (from static analysis): sql_injection (/target/search), weak_credentials (/target/login), sensitive_exposure (/target/docs).
 
 Workflow (repeat continuously):
 1. Call get_logs to fetch the latest requests — look for attack patterns
-2. SQL injection signals: quotes ('), OR/UNION keywords, strange characters in ?q= params
+2. SQL injection signals: quotes ('), OR/UNION keywords in ?q= params
 3. Brute force signals: multiple /login attempts with different passwords
 4. Sensitive exposure: /docs requests with path=../ or path=config/secret
-4. When you spot an attack pattern → call raise_alert immediately (+15 pts)
-5. Then call patch_vulnerability to fix it (+25 pts)
+5. When you spot an attack pattern → call raise_alert immediately (+15 pts)
+6. Then call patch_vulnerability to fix it (+25 pts)
 
 Patchable vulnerability IDs: sql_injection, weak_credentials, sensitive_exposure
 
-Speed matters — the red team is actively exploiting right now. Check logs, alert, patch. Repeat."""
+Speed matters — patch proactively. A patched vulnerability earns +25 pts and denies red their +20 exploit points entirely."""
 
 BLUE_TOOLS = [
     {
@@ -180,6 +183,125 @@ async def execute_red_tool(name: str, inp: dict) -> str:
     return json.dumps({"error": "unknown tool"})
 
 
+async def _run_static_scan() -> str:
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    target_file = os.path.join(root, "targets", "vulnerable_app.py")
+    rules_file  = os.path.join(root, "targets", "semgrep-rules.yaml")
+
+    # Emit a "starting" event immediately so the UI shows activity
+    match_state.emit({
+        "type": "scan", "agent": "blue", "tool": "static_scan", "findings": None,
+        "result_summary": f"STATIC SCAN: running semgrep on {os.path.basename(target_file)}…",
+        "scan_status": "running",
+    })
+
+    # Use sys.executable so semgrep is found inside the venv on any platform
+    # Find semgrep next to the current Python binary so it works inside the venv.
+    # On Windows the binary is semgrep.exe; on Mac/Linux it has no extension.
+    semgrep_bin = os.path.join(os.path.dirname(sys.executable), "semgrep")
+    if sys.platform == "win32":
+        semgrep_bin += ".exe"
+    cmd = [
+        semgrep_bin, "--json",
+        "--metrics=off",
+        "--disable-version-check",
+        "--config", rules_file, target_file,
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        msg = f"semgrep not found at {semgrep_bin} — run: pip install semgrep ({exc})"
+        match_state.emit({
+            "type": "scan", "agent": "blue", "tool": "static_scan", "findings": [],
+            "result_summary": f"STATIC SCAN ERROR: {msg}",
+            "scan_status": "error", "scan_error": msg,
+        })
+        return json.dumps({"error": msg, "findings": []})
+
+    async def _wait_match_end():
+        while match_state.status == MatchStatus.RUNNING:
+            await asyncio.sleep(0.3)
+
+    communicate_task = asyncio.create_task(proc.communicate())
+    watch_task = asyncio.create_task(_wait_match_end())
+
+    done, pending = await asyncio.wait(
+        {communicate_task, watch_task},
+        timeout=15,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    for t in pending:
+        t.cancel()
+
+    if communicate_task not in done:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+
+        if not done:
+            msg = "semgrep timed out after 15s"
+            match_state.emit({
+                "type": "scan", "agent": "blue", "tool": "static_scan", "findings": [],
+                "result_summary": f"STATIC SCAN ERROR: {msg}",
+                "scan_status": "error", "scan_error": msg,
+            })
+            return json.dumps({"error": msg, "findings": []})
+
+        match_state.emit({
+            "type": "scan", "agent": "blue", "tool": "static_scan",
+            "findings": [], "scan_status": "done",
+            "result_summary": "STATIC SCAN: cancelled (match ended before scan finished)",
+        })
+        return json.dumps({"findings": [], "cancelled": True})
+
+    stdout, stderr = communicate_task.result()
+
+    stderr_text = stderr.decode(errors="replace").strip()
+
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        raw = stdout.decode(errors="replace")[:300]
+        msg = f"could not parse semgrep output. stderr: {stderr_text[:200]}"
+        match_state.emit({
+            "type": "scan", "agent": "blue", "tool": "static_scan", "findings": [],
+            "result_summary": f"STATIC SCAN ERROR: {msg}",
+            "scan_status": "error", "scan_error": msg, "scan_raw": raw,
+        })
+        return json.dumps({"error": msg, "findings": []})
+
+    findings = []
+    for r in data.get("results", []):
+        meta = r.get("extra", {}).get("metadata", {})
+        findings.append({
+            "vuln_id":  meta.get("vuln_id",  r.get("check_id", "unknown")),
+            "endpoint": meta.get("endpoint", "unknown"),
+            "cwe":      meta.get("cwe", ""),
+            "message":  r.get("extra", {}).get("message", ""),
+            "line":     r.get("start", {}).get("line"),
+        })
+
+    summary = (
+        f"STATIC SCAN: {len(findings)} finding(s) — " + ", ".join(f["vuln_id"] for f in findings)
+        if findings else "STATIC SCAN: 0 findings"
+    )
+    match_state.emit({
+        "type": "scan", "agent": "blue", "tool": "static_scan",
+        "result_summary": summary, "findings": findings,
+        "scan_status": "done",
+        "scan_stderr": stderr_text[:400] if stderr_text else None,
+    })
+    return json.dumps({"findings": findings})
+
+
 async def execute_blue_tool(name: str, inp: dict) -> str:
     if name == "get_logs":
         logs = target.get_recent_logs(inp.get("count", 15))
@@ -221,15 +343,21 @@ async def execute_blue_tool(name: str, inp: dict) -> str:
                 "score_delta": 25,
             })
             if target.all_patched():
-                match_state.winner = "blue"
+                red, blue = match_state.score.red, match_state.score.blue
+                match_state.winner = "red" if red > blue else "blue" if blue > red else "draw"
                 match_state.status = MatchStatus.FINISHED
+                winner_label = (
+                    f"All vulnerabilities patched — {match_state.winner.upper()} WINS! ({red} vs {blue})"
+                    if match_state.winner != "draw"
+                    else f"All vulnerabilities patched — DRAW ({red} vs {blue})"
+                )
                 match_state.emit({
                     "type": "match_end",
                     "reason": "all_patched",
-                    "winner": "blue",
-                    "final_score_red": match_state.score.red,
-                    "final_score_blue": match_state.score.blue,
-                    "result_summary": "All vulnerabilities patched — BLUE WINS!",
+                    "winner": match_state.winner,
+                    "final_score_red": red,
+                    "final_score_blue": blue,
+                    "result_summary": winner_label,
                 })
         return json.dumps(result)
 
@@ -320,7 +448,10 @@ async def monitor_timer() -> None:
 
 
 async def run_match() -> None:
+    # Scan runs concurrently with agents — 6s is process startup, not scan time.
+    # Agents start immediately; findings appear in the panel ~6s in.
     await asyncio.gather(
+        _run_static_scan(),
         run_agent("red", RED_SYSTEM, RED_TOOLS, execute_red_tool),
         run_agent("blue", BLUE_SYSTEM, BLUE_TOOLS, execute_blue_tool),
         monitor_timer(),

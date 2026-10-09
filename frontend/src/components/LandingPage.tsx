@@ -9,7 +9,7 @@ export default function LandingPage({ onStart }: Props) {
 
   return (
     <div className="w-full overflow-hidden">
-      {/* Sliding track — 4 pages side by side */}
+      {/* Sliding track — 5 pages side by side */}
       <div
         className="flex transition-transform duration-500 ease-in-out"
         style={{ transform: `translateX(-${page * 100}%)` }}
@@ -38,7 +38,7 @@ export default function LandingPage({ onStart }: Props) {
           >
             How it works →
           </button>
-          <Dots current={0} total={4} />
+          <Dots current={0} total={5} />
         </div>
 
         {/* ── Page 2: How the arena works ── */}
@@ -95,7 +95,7 @@ export default function LandingPage({ onStart }: Props) {
               See a live demo →
             </button>
           </div>
-          <Dots current={1} total={4} />
+          <Dots current={1} total={5} />
         </div>
 
         {/* ── Page 3: Prompt Injection Demo ── */}
@@ -123,9 +123,45 @@ export default function LandingPage({ onStart }: Props) {
             >
               ← Back
             </button>
-            <Dots current={2} total={4} />
+            <Dots current={2} total={5} />
             <button
               onClick={() => setPage(3)}
+              className="px-8 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-semibold text-sm tracking-wide transition-colors"
+            >
+              Exploit #2 →
+            </button>
+          </div>
+        </div>
+
+        {/* ── Page 4: Agent Overreach Demo ── */}
+        <div className="min-w-full min-h-screen flex flex-col px-4 py-10">
+          <div className="text-center mb-5">
+            <p className="text-xs tracking-[0.3em] text-gray-600 uppercase mb-2">Live Demo · Exploit #2</p>
+            <h2 className="text-3xl font-bold text-white mb-1">The helpful attacker.</h2>
+            <p className="text-gray-500 text-sm max-w-xl mx-auto">
+              No hostile input needed. A trusted agent with broad access overwrites your files,
+              drops unrequested code, and makes false git claims — all while trying to help.
+              Toggle Ask-before-acting to see it stopped.
+            </p>
+          </div>
+
+          <iframe
+            src="/demo2.html"
+            className="w-full rounded-xl border border-gray-800 flex-1"
+            style={{ minHeight: "620px" }}
+            title="Agent Overreach Demo"
+          />
+
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={() => setPage(2)}
+              className="px-6 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors"
+            >
+              ← Back
+            </button>
+            <Dots current={3} total={5} />
+            <button
+              onClick={() => setPage(4)}
               className="px-8 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-semibold text-sm tracking-wide transition-colors"
             >
               Enter the arena →
@@ -133,7 +169,7 @@ export default function LandingPage({ onStart }: Props) {
           </div>
         </div>
 
-        {/* ── Page 4: Start ── */}
+        {/* ── Page 5: Start ── */}
         <div className="min-w-full min-h-screen flex flex-col items-center justify-center px-6 text-center">
           <p className="text-xs tracking-[0.3em] text-gray-600 uppercase mb-6">
             Target Profile
@@ -160,7 +196,7 @@ export default function LandingPage({ onStart }: Props) {
 
           <div className="flex gap-4 items-center">
             <button
-              onClick={() => setPage(2)}
+              onClick={() => setPage(3)}
               className="px-6 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors"
             >
               ← Back
@@ -172,7 +208,7 @@ export default function LandingPage({ onStart }: Props) {
               Start Match
             </button>
           </div>
-          <Dots current={3} total={4} />
+          <Dots current={4} total={5} />
           <p className="mt-10 text-xs text-gray-700">Built for CyberRange Hackathon · Naveena M · Aditya S</p>
         </div>
 

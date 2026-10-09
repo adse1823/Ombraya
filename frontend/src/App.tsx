@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AgentPanel from "./components/AgentPanel";
 import LandingPage from "./components/LandingPage";
+import SemgrepPanel from "./components/SemgrepPanel";
 import VulnStatus from "./components/VulnStatus";
-import type { MatchEvent, MatchStatus, Score, VulnState } from "./types";
+import type { MatchEvent, MatchStatus, Score, SemgrepFinding, VulnState } from "./types";
 
 const DEFAULT_VULN_STATUS: Record<string, VulnState> = {
   sql_injection:      { discovered: false, exploited: false, patched: false },
@@ -25,6 +26,10 @@ export default function App() {
   const [redEvents, setRedEvents] = useState<MatchEvent[]>([]);
   const [blueEvents, setBlueEvents] = useState<MatchEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [scanFindings, setScanFindings] = useState<SemgrepFinding[] | null>(null);
+  const [scanStatus, setScanStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanStderr, setScanStderr] = useState<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
 
@@ -44,6 +49,14 @@ export default function App() {
       }
     }
 
+    if (ev.type === "scan") {
+      if (ev.scan_status) setScanStatus(ev.scan_status);
+      if (ev.scan_error) setScanError(ev.scan_error);
+      if (ev.scan_stderr !== undefined) setScanStderr(ev.scan_stderr ?? null);
+      if (ev.findings !== undefined && ev.findings !== null) setScanFindings(ev.findings);
+      if (ev.scan_status === "running") setScanStatus("running");
+    }
+
     if (ev.score_delta != null && ev.agent) {
       setScore((prev) => ({
         ...prev,
@@ -54,7 +67,6 @@ export default function App() {
     if (ev.agent === "red") setRedEvents((prev) => [...prev, ev]);
     else if (ev.agent === "blue") setBlueEvents((prev) => [...prev, ev]);
     else if (ev.type === "match_end") {
-      // push to both panels
       setRedEvents((prev) => [...prev, ev]);
       setBlueEvents((prev) => [...prev, ev]);
     }
@@ -86,6 +98,10 @@ export default function App() {
     setRedEvents([]);
     setBlueEvents([]);
     setTimeRemaining(210);
+    setScanFindings(null);
+    setScanStatus("idle");
+    setScanError(null);
+    setScanStderr(null);
 
     const res = await fetch("/api/match/start", { method: "POST" });
     if (res.ok) {
@@ -135,7 +151,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Connection dot */}
           {isRunning && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`} />
@@ -143,12 +158,10 @@ export default function App() {
             </div>
           )}
 
-          {/* Timer */}
           <div className={`tabular-nums text-2xl font-bold ${isRunning && timeRemaining < 30 ? "text-red-400 animate-pulse" : "text-gray-300"}`}>
             {formatTime(timeRemaining)}
           </div>
 
-          {/* Control button */}
           {!isRunning ? (
             <button
               onClick={handleStart}
@@ -194,6 +207,16 @@ export default function App() {
       <div className="grid grid-cols-2 gap-4 mb-5">
         <AgentPanel side="red" events={redEvents} score={score.red} />
         <AgentPanel side="blue" events={blueEvents} score={score.blue} />
+      </div>
+
+      {/* Semgrep static analysis panel */}
+      <div className="mb-5">
+        <SemgrepPanel
+          findings={scanFindings}
+          scanStatus={scanStatus}
+          scanError={scanError}
+          scanStderr={scanStderr}
+        />
       </div>
 
       {/* Vuln status */}

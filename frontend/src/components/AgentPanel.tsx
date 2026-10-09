@@ -16,6 +16,7 @@ const EVENT_STYLE: Record<string, string> = {
   monitor:     "text-slate-500",
   alert:       "text-yellow-400 font-semibold",
   patch:       "text-emerald-400 font-bold",
+  scan:        "text-cyan-400 font-semibold",
   thought:     "text-gray-500 italic text-xs",
   error:       "text-red-600",
 };
@@ -27,6 +28,7 @@ const EVENT_PREFIX: Record<string, string> = {
   monitor: "👁",
   alert:   "🚨",
   patch:   "🛡",
+  scan:    "◈",
   thought: "…",
   error:   "✗",
   agent_start: "▶",
