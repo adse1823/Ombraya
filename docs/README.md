@@ -10,3 +10,4 @@ Architecture and design decisions for CyberRange Arena.
 | [ADR-004](adr-004-agent-design.md) | Agent implementation — Anthropic SDK, Haiku, rolling context | Accepted |
 | [ADR-005](adr-005-scoring-system.md) | Points-based scoring with asymmetric values | Accepted |
 | [ADR-006](adr-006-realtime-streaming.md) | Server-Sent Events for live match feed | Accepted |
+| [tool-usage](tool-usage.md) | Where every tool (external services + agent tools) is used | Reference |
