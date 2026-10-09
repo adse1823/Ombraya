@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-950 text-gray-100 font-mono;
+}
+
+.agent-log {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+.agent-log::-webkit-scrollbar { width: 4px; }
+.agent-log::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
