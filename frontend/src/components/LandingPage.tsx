@@ -9,7 +9,7 @@ export default function LandingPage({ onStart }: Props) {
 
   return (
     <div className="w-full overflow-hidden">
-      {/* Sliding track — 3 pages side by side */}
+      {/* Sliding track — 4 pages side by side */}
       <div
         className="flex transition-transform duration-500 ease-in-out"
         style={{ transform: `translateX(-${page * 100}%)` }}
@@ -38,7 +38,7 @@ export default function LandingPage({ onStart }: Props) {
           >
             How it works →
           </button>
-          <Dots current={0} />
+          <Dots current={0} total={4} />
         </div>
 
         {/* ── Page 2: How the arena works ── */}
@@ -50,7 +50,6 @@ export default function LandingPage({ onStart }: Props) {
             Attack. Detect. Patch. Score.
           </h2>
 
-          {/* 3-step cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl mb-10">
             {[
               { icon: "🎯", title: "Sandboxed Target", body: "A deliberately-vulnerable app is spun up with three planted vulnerabilities — SQL injection, weak credentials, and sensitive config exposure." },
@@ -65,7 +64,6 @@ export default function LandingPage({ onStart }: Props) {
             ))}
           </div>
 
-          {/* Scoring table */}
           <div className="grid grid-cols-2 gap-4 w-full max-w-3xl mb-10">
             <div className="rounded-xl border border-red-900/40 bg-red-950/10 p-5">
               <p className="text-xs font-bold tracking-widest text-red-500 mb-3">RED — Attacker</p>
@@ -94,13 +92,48 @@ export default function LandingPage({ onStart }: Props) {
               onClick={() => setPage(2)}
               className="px-8 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-semibold text-sm tracking-wide transition-colors"
             >
-              Ready to play →
+              See a live demo →
             </button>
           </div>
-          <Dots current={1} />
+          <Dots current={1} total={4} />
         </div>
 
-        {/* ── Page 3: Start ── */}
+        {/* ── Page 3: Prompt Injection Demo ── */}
+        <div className="min-w-full min-h-screen flex flex-col px-4 py-10">
+          <div className="text-center mb-5">
+            <p className="text-xs tracking-[0.3em] text-gray-600 uppercase mb-2">Live Demo</p>
+            <h2 className="text-3xl font-bold text-white mb-1">Why scope enforcement matters.</h2>
+            <p className="text-gray-500 text-sm">
+              A poisoned README tries to talk the agent into leaking credentials.
+              Toggle the Trust Gateway to see both outcomes.
+            </p>
+          </div>
+
+          <iframe
+            src="/demo.html"
+            className="w-full rounded-xl border border-gray-800 flex-1"
+            style={{ minHeight: "620px" }}
+            title="Prompt Injection Demo"
+          />
+
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={() => setPage(1)}
+              className="px-6 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors"
+            >
+              ← Back
+            </button>
+            <Dots current={2} total={4} />
+            <button
+              onClick={() => setPage(3)}
+              className="px-8 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-semibold text-sm tracking-wide transition-colors"
+            >
+              Enter the arena →
+            </button>
+          </div>
+        </div>
+
+        {/* ── Page 4: Start ── */}
         <div className="min-w-full min-h-screen flex flex-col items-center justify-center px-6 text-center">
           <p className="text-xs tracking-[0.3em] text-gray-600 uppercase mb-6">
             Target Profile
@@ -108,7 +141,6 @@ export default function LandingPage({ onStart }: Props) {
           <h2 className="text-3xl font-bold text-white mb-2">Three planted vulnerabilities.</h2>
           <p className="text-gray-500 text-sm mb-10">Can blue patch them all before red scores?</p>
 
-          {/* Vuln cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl mb-14">
             {[
               { name: "SQL Injection",      endpoint: "/target/search", severity: "critical", color: "border-red-800",    label: "text-red-400",    desc: "Unsanitised query parameter exposes the full database." },
@@ -128,7 +160,7 @@ export default function LandingPage({ onStart }: Props) {
 
           <div className="flex gap-4 items-center">
             <button
-              onClick={() => setPage(1)}
+              onClick={() => setPage(2)}
               className="px-6 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors"
             >
               ← Back
@@ -140,7 +172,7 @@ export default function LandingPage({ onStart }: Props) {
               Start Match
             </button>
           </div>
-          <Dots current={2} />
+          <Dots current={3} total={4} />
           <p className="mt-10 text-xs text-gray-700">Built for CyberRange Hackathon · Naveena M · Aditya S</p>
         </div>
 
@@ -149,10 +181,10 @@ export default function LandingPage({ onStart }: Props) {
   );
 }
 
-function Dots({ current }: { current: number }) {
+function Dots({ current, total }: { current: number; total: number }) {
   return (
     <div className="flex gap-2 mt-10">
-      {[0, 1, 2].map((i) => (
+      {Array.from({ length: total }).map((_, i) => (
         <span
           key={i}
           className={`w-1.5 h-1.5 rounded-full transition-colors ${i === current ? "bg-gray-400" : "bg-gray-700"}`}
